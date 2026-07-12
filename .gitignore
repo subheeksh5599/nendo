@@ -1,0 +1,38 @@
+# Rust
+/target/
+**/*.rs.bk
+Cargo.lock
+*.pdb
+
+# Node
+node_modules/
+.pnp/
+.yarn/
+dist/
+.env
+.env.local
+
+# Dashboard
+dashboard/node_modules/
+
+# Sled audit DB
+*.db
+*.db.lock
+
+# Foundry
+out/
+cache/
+broadcast/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
