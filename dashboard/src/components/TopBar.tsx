@@ -25,11 +25,9 @@ export function TopBar({ chainData }: { chainData: ChainData | null }) {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: '0.75rem', color: 'var(--ink3)' }}>
-        <span style={{ width: 6, height: 6, borderRadius: '50%', background: chainData ? 'var(--emerald)' : 'var(--rose)', display: 'inline-block' }} />
-        {chainData ? 'Live' : 'Offline'}
-        <span style={{ fontFamily: 'var(--font-mono)' }}>
-          {chainData?.blockNumber ? `#${chainData.blockNumber}` : '--'}
-        </span>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: chainData?.blockNumber ? 'var(--emerald)' : 'var(--rose)', display: 'inline-block' }} />
+        {chainData?.blockNumber ? `Fuji · #${chainData.blockNumber}` : 'RPC offline'}
+        {chainData?.gasPrice ? ` · ${Number(chainData.gasPrice).toFixed(0)} gwei` : ''}
       </div>
     </header>
   )

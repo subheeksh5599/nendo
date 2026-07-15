@@ -3,10 +3,6 @@ import { ethers } from "ethers";
 const FUJI_RPC = "https://api.avax-test.network/ext/bc/C/rpc";
 const provider = new ethers.JsonRpcProvider(FUJI_RPC);
 
-const startTime = Date.now();
-let processedToday = 1284;
-let blockedToday = 17;
-
 async function getChainData() {
   try {
     const [blockNumber, gasPrice, network] = await Promise.all([
@@ -25,19 +21,30 @@ async function getChainData() {
   }
 }
 
+// Try to fetch proxy metrics. If the proxy isn't running, return zeros.
+async function getProxyMetrics() {
+  try {
+    const res = await fetch("http://127.0.0.1:8545/metrics");
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 export default async function handler(_req: any, res: any) {
   const chain = await getChainData();
-  const uptimeMs = Date.now() - startTime;
-  const uptimeDays = Math.floor(uptimeMs / 86400000);
-  const uptimeHours = Math.floor((uptimeMs % 86400000) / 3600000);
+  const proxy = await getProxyMetrics();
 
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.json({
-    uptime: `${uptimeDays}d ${String(uptimeHours).padStart(2, "0")}h`,
-    processedToday,
-    blockedToday,
-    registeredAgents: 28,
-    blockRatio: processedToday > 0 ? ((blockedToday / (processedToday + blockedToday)) * 100).toFixed(2) : "0.00",
+    uptime: proxy ? `${Math.floor(proxy.uptime_secs / 3600)}h ${Math.floor((proxy.uptime_secs % 3600) / 60)}m` : "0h 0m",
+    processedToday: proxy?.processed ?? 0,
+    blockedToday: proxy?.blocked ?? 0,
+    blockRatio: proxy && (proxy.processed + proxy.blocked) > 0
+      ? ((proxy.blocked / (proxy.processed + proxy.blocked)) * 100).toFixed(2)
+      : "0.00",
     chain,
+    proxyOnline: proxy !== null,
   });
 }

@@ -1,6 +1,6 @@
 export function DonutChart({ blockedToday, processedToday }: { blockedToday: number; processedToday: number }) {
   const total = blockedToday + processedToday || 1
-  const allowedPct = ((processedToday / total) * 100).toFixed(1)
+  const allowedPct = total > 0 ? ((processedToday / total) * 100).toFixed(1) : "0.0"
   const blockedPct = ((blockedToday / total) * 100).toFixed(1)
 
   // Arc lengths for SVG dasharray (circumference = 2 * PI * 58 ≈ 364.4)

@@ -32,9 +32,12 @@ pub mod types {
     }
 }
 
+#[allow(dead_code)]
 pub struct NendoClient {
     rpc_url: String,
+    #[allow(dead_code)]
     policy_address: String,
+    #[allow(dead_code)]
     audit_address: String,
 }
 

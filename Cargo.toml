@@ -1,38 +1,39 @@
 [package]
 name = "nendo"
 version = "0.1.0"
+description = "Agent RPC Firewall for Avalanche — security middleware for autonomous AI agents"
+license = "MIT"
 edition = "2021"
 
-[profile.release]
-opt-level = 3
-lto = true
-
 [dependencies]
-# HTTP server
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+futures-util = "0.3"
+
+# HTTP server (hyper)
 hyper = { version = "1.5", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
 http-body-util = "0.1"
-tokio = { version = "1", features = ["full"] }
 
-# Ethereum JSON-RPC
-ethers = { version = "2.0", features = ["rustls", "ws"] }
+# HTTP client for RPC calls
+reqwest = { version = "0.12", features = ["json"] }
 
-# Async runtime
-futures-util = "0.3"
+# Bytes handling
+bytes = "1"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# Config
+toml = "0.8"
+
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# Local audit log
+# Local audit log (embedded key-value store)
 sled = "0.34"
-
-# Config
-config = "0.14"
 
 # Error handling
 anyhow = "1"
@@ -41,6 +42,6 @@ thiserror = "2"
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json"] }
 
-[[bin]]
-name = "nendo"
-path = "src/main.rs"
+[profile.release]
+opt-level = 3
+lto = true

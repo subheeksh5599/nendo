@@ -1,0 +1,28 @@
+# Nendo — Agent RPC Firewall Configuration
+# Copy to config.toml before running
+
+# Avalanche C-Chain RPC (Fuji testnet default)
+rpc_url = "https://api.avax-test.network/ext/bc/C/rpc"
+chain_id = 43113
+
+# On-chain contract addresses (fill after deployment)
+policy_contract = "0x0000000000000000000000000000000000000000"
+audit_contract = "0x0000000000000000000000000000000000000000"
+
+# Deployer private key for on-chain governance (hex, 0x-prefixed)
+owner_private_key = ""
+
+# Proxy server listen address
+server_host = "127.0.0.1"
+server_port = 8545
+
+# Local audit database path
+audit_path = "./nendo_audit.db"
+
+[policy]
+max_avax_per_tx = "0x8ac7230489e80000"       # 10 AVAX (in wei hex)
+max_avax_daily = "0x56bc75e2d63100000"       # 100 AVAX
+min_interval_seconds = 5
+paused = false
+allowed_contracts = []
+blocked_recipients = []

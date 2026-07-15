@@ -13,9 +13,9 @@ export interface Stats {
   uptime: string;
   processedToday: number;
   blockedToday: number;
-  registeredAgents: number;
   blockRatio: string;
   chain: ChainData;
+  proxyOnline: boolean;
 }
 
 export interface TxFeedItem {
