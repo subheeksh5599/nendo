@@ -1,12 +1,12 @@
 [profile.default]
 src = "contracts/src"
 out = "out"
+test = "contracts/test"
 libs = ["lib"]
 solc = "0.8.20"
-
-[profile.default.foundry]
-solc_version = "0.8.20"
-
-[profile.default.optimizer]
-enabled = true
-runs = 200
+optimizer = true
+optimizer_runs = 200
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "forge-std/=lib/forge-std/src/"
+]

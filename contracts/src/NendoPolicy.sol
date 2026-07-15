@@ -71,7 +71,7 @@ contract NendoPolicy is Ownable {
     // ─── Policy Evaluation (read by Nendo RPC proxy off-chain) ─────────
 
     /// @notice Check if a transaction from `from` to `to` with `value` would pass
-    /// @dev This is a view function — no state changes. Called by the Nendo proxy.
+    /// @dev View function — uses eth_call by the Nendo proxy. No state changes.
     function check(
         address from,
         address to,
@@ -92,16 +92,17 @@ contract NendoPolicy is Ownable {
             return (false, "Contract not in allowlist");
         }
 
-        // Daily limit check
+        // Daily limit check (view-safe: compute effective spent without writing)
         uint256 effectiveMaxDaily = agent.hasOverride ? agent.maxDaily : maxDaily;
-        _refreshDailyWindow(from);
-        if (dailySpent[from] + value > effectiveMaxDaily) {
+        uint256 effectiveDailySpent = _getEffectiveDailySpent(from);
+        if (effectiveDailySpent + value > effectiveMaxDaily) {
             return (false, "Exceeds daily spending limit");
         }
 
-        // Rate limit
+        // Rate limit (skip if agent has never transacted before)
         uint256 effectiveMinInterval = agent.hasOverride ? agent.minInterval : minIntervalSeconds;
-        if (block.timestamp - lastTxTime[from] < effectiveMinInterval) {
+        uint256 lastTx = lastTxTime[from];
+        if (lastTx > 0 && block.timestamp - lastTx < effectiveMinInterval) {
             return (false, "Rate limit exceeded");
         }
 
@@ -109,7 +110,7 @@ contract NendoPolicy is Ownable {
     }
 
     /// @notice Record a transaction (called by Nendo proxy after forwarding)
-    function record(address from, address to, uint256 value) external onlyOwner {
+    function record(address from, address /* to */, uint256 value) external onlyOwner {
         _refreshDailyWindow(from);
         dailySpent[from] += value;
         lastTxTime[from] = block.timestamp;
@@ -167,6 +168,15 @@ contract NendoPolicy is Ownable {
     }
 
     // ─── Internal ────────────────────────────────────────────────────────
+
+    /// @notice View-safe daily spent check — returns effective spent accounting for window rollover
+    function _getEffectiveDailySpent(address agent) internal view returns (uint256) {
+        uint256 dayStart = (block.timestamp / 1 days) * 1 days;
+        if (dailyWindowStart[agent] < dayStart) {
+            return 0; // new day, spent resets
+        }
+        return dailySpent[agent];
+    }
 
     function _refreshDailyWindow(address agent) internal {
         uint256 dayStart = (block.timestamp / 1 days) * 1 days;

@@ -136,6 +136,6 @@ export class NendoClient {
   async getAuditLogs(limit: number = 50): Promise<AuditEntry[]> {
     const resp = await fetch(`${this.rpcUrl}/logs?limit=${limit}`);
     if (!resp.ok) return [];
-    return resp.json();
+    return (await resp.json()) as AuditEntry[];
   }
 }

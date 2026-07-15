@@ -39,7 +39,10 @@ contract NendoTest is Test {
         (bool allowed1, ) = policy.check(AGENT, RECIPIENT, 1 ether);
         assertTrue(allowed1);
 
-        // Second immediate tx should fail
+        // Record it (simulates proxy forwarding the tx)
+        policy.record(AGENT, RECIPIENT, 1 ether);
+
+        // Second immediate tx should fail rate limit
         (bool allowed2, ) = policy.check(AGENT, RECIPIENT, 1 ether);
         assertFalse(allowed2);
     }
