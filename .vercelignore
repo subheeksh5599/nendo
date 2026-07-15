@@ -1,0 +1,16 @@
+# Ignore heavy backend, contract, and Rust files only at the root level for Vercel deploy
+/lib/
+/src/
+/contracts/
+/scripts/
+/sdk/
+/target/
+/out/
+/cache/
+/broadcast/
+/nendo_audit.db/
+/Cargo.lock
+/Cargo.toml
+/foundry.lock
+/foundry.toml
+/README.md
