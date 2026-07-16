@@ -2,31 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 jobs:
-  rust:
-    name: Rust — build + clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build
-        run: cargo build --release
-
-      - name: Clippy (no warnings allowed)
-        run: cargo clippy --release -- -D warnings
-
-  forge:
-    name: Forge — Solidity tests
+  forge-test:
+    name: Forge — 42 Solidity tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,8 +24,31 @@ jobs:
       - name: Forge test
         run: forge test -vvv
 
-  frontend:
-    name: Frontend — build
+  rust-build:
+    name: Rust — build + clippy + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: cargo build --release --verbose
+
+      - name: Clippy (zero warnings)
+        run: cargo clippy --release -- -D warnings
+
+      - name: Cargo test
+        run: cargo test --verbose
+
+  frontend-build:
+    name: Dashboard — TypeScript build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

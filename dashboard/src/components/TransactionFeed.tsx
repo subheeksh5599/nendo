@@ -55,7 +55,15 @@ export function TransactionFeed({ transactions, total }: { transactions: TxFeedI
             </tr>
           </thead>
           <tbody>
-            {transactions.map((tx, i) => (
+            {transactions.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding: '40px 12px', textAlign: 'center', color: 'var(--ink3)', fontSize: '0.85rem' }}>
+                  No transactions yet.<br />
+                  <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>Point your AI agent's RPC to the Nendo proxy to see live data.</span>
+                </td>
+              </tr>
+            ) : (
+              transactions.map((tx, i) => (
               <tr key={i}>
                 <td style={{ padding: 12, borderBottom: i < transactions.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--ink)' }}>
                   {fmtTime(tx.time)}
@@ -79,7 +87,7 @@ export function TransactionFeed({ transactions, total }: { transactions: TxFeedI
                   {tx.hash ?? '—'}
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>
