@@ -1,10 +1,11 @@
 <div align="center">
 
-<img src="docs/media/dashboard-hero.png" alt="Nendo — Agent RPC Firewall on Avalanche" width="100%" />
+<img src="docs/media/landing-hero.png" alt="Nendo — Agent RPC Firewall on Avalanche" width="100%" />
 
 &nbsp;
 
 [![Live demo](https://img.shields.io/badge/●_live-nendo--rust.vercel.app-E84142)](https://nendo-rust.vercel.app)
+[![Hyperframes demo](https://img.shields.io/badge/▶-hyperframes%20demo-f87171)](https://x.com/KomariS18774/status/2077361640685617178)
 [![Fuji: NendoPolicy](https://img.shields.io/badge/📜_Fuji-NendoPolicy-14151a)](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308)
 [![Fuji: NendoAudit](https://img.shields.io/badge/📜_Fuji-NendoAudit-14151a)](https://testnet.snowtrace.io/address/0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7)
 [![License: MIT](https://img.shields.io/badge/license-MIT-E84142.svg)](LICENSE)
@@ -18,7 +19,7 @@ Nendo is an RPC proxy firewall that sits between your AI agents and the Avalanch
 
 ### ▶ Live now — on-chain policy enforcement at **[nendo-rust.vercel.app](https://nendo-rust.vercel.app)**
 
-**[ Live demo ↗ ](https://nendo-rust.vercel.app)** · **[ NendoPolicy on SnowTrace ↗ ](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308)** · **[ Real blocked tx ↗ ](https://testnet.snowtrace.io/tx/0x431d52cbedc7d04c603a27b2d2a55bf80e02eb92abe41dc94b5183e75af49ef3)** · **[ Architecture ↓ ](#architecture)** · **[ Run it locally ↓ ](#run-it-locally)**
+**[ Live demo ↗ ](https://nendo-rust.vercel.app)** · **[ Hyperframes demo ↗ ](https://x.com/KomariS18774/status/2077361640685617178)** · **[ NendoPolicy on SnowTrace ↗ ](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308)** · **[ Real blocked tx ↗ ](https://testnet.snowtrace.io/tx/0x431d52cbedc7d04c603a27b2d2a55bf80e02eb92abe41dc94b5183e75af49ef3)** · **[ Architecture ↓ ](#architecture)** · **[ Run it locally ↓ ](#run-it-locally)**
 
 Built for the Avalanche ecosystem. MIT licensed.
 
@@ -108,6 +109,8 @@ Existing solutions are off-chain scripts. Change the config file, bypass the gua
 ## How Nendo works
 
 Five capabilities, all enforced by Solidity contracts on Avalanche C-Chain. The policy contract is live at [0x473a4B...](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308).
+
+<img src="docs/media/dashboard-hero.png" alt="Nendo Operations Dashboard — live transaction feed, KPI cards, decision breakdown, audit log" width="100%" />
 
 ### 1 · RPC proxy firewall
 
