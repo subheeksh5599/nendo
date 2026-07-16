@@ -39,8 +39,18 @@ sled = "0.34"
 anyhow = "1"
 thiserror = "2"
 
+# Trait abstractions
+async-trait = "0.1"
+
+# Cryptography (signature recovery for from-field verification)
+k256 = { version = "0.13", features = ["ecdsa", "sha256"] }
+sha3 = "0.10"
+hex = "0.4"
+
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json"] }
+wiremock = "0.6"
+tokio-test = "0.4"
 
 [profile.release]
 opt-level = 3

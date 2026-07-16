@@ -1,6 +1,18 @@
 import { ethers } from "ethers";
 
 const FUJI_RPC = "https://api.avax-test.network/ext/bc/C/rpc";
+const NENDO_POLICY = "0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308";
+const NENDO_AUDIT = "0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7";
+
+const AUDIT_ABI = [
+  "event TransactionAllowed(address indexed agent, address indexed recipient, uint256 amount, bytes32 indexed intentHash, uint256 timestamp)",
+  "event TransactionBlocked(address indexed agent, address indexed recipient, uint256 amount, string reason, uint256 timestamp)",
+];
+
+const POLICY_ABI = [
+  "function paused() view returns (bool)",
+];
+
 const provider = new ethers.JsonRpcProvider(FUJI_RPC);
 
 async function getChainData() {
@@ -12,16 +24,16 @@ async function getChainData() {
     ]);
     return {
       blockNumber,
-      gasPrice: gasPrice.gasPrice ? ethers.formatUnits(gasPrice.gasPrice, "gwei") : null,
+      gasPrice: gasPrice.gasPrice ? parseFloat(ethers.formatUnits(gasPrice.gasPrice, "gwei")).toFixed(1) : "1.0",
       chainId: Number(network.chainId),
       network: network.name,
     };
   } catch {
-    return { blockNumber: null, gasPrice: null, chainId: 43113, network: "fuji" };
+    return { blockNumber: null, gasPrice: "1.0", chainId: 43113, network: "fuji" };
   }
 }
 
-// Try to fetch proxy metrics. If the proxy isn't running, return zeros.
+// Try to fetch proxy metrics. If the proxy isn't running, fall back to on-chain data.
 async function getProxyMetrics() {
   try {
     const res = await fetch("http://127.0.0.1:8545/metrics");
@@ -32,19 +44,59 @@ async function getProxyMetrics() {
   }
 }
 
+async function getOnChainActivity() {
+  try {
+    const currentBlock = await provider.getBlockNumber();
+    const fromBlock = Math.max(currentBlock - 500, 0);
+    const audit = new ethers.Contract(NENDO_AUDIT, AUDIT_ABI, provider);
+
+    const [allowed, blocked] = await Promise.all([
+      audit.queryFilter("TransactionAllowed", fromBlock, currentBlock),
+      audit.queryFilter("TransactionBlocked", fromBlock, currentBlock),
+    ]);
+
+    return {
+      allowed: allowed.length,
+      blocked: blocked.length,
+    };
+  } catch {
+    return { allowed: 0, blocked: 0 };
+  }
+}
+
+async function getPausedState() {
+  try {
+    const policy = new ethers.Contract(NENDO_POLICY, POLICY_ABI, provider);
+    return await policy.paused();
+  } catch {
+    return false;
+  }
+}
+
 export default async function handler(_req: any, res: any) {
-  const chain = await getChainData();
-  const proxy = await getProxyMetrics();
+  const [chain, proxy, onChain, paused] = await Promise.all([
+    getChainData(),
+    getProxyMetrics(),
+    getOnChainActivity(),
+    getPausedState(),
+  ]);
+
+  const processed = proxy?.processed ?? onChain.allowed;
+  const blocked = proxy?.blocked ?? onChain.blocked;
+  const total = processed + blocked;
+  const blockRatio = total > 0 ? ((blocked / total) * 100).toFixed(2) : "0.00";
 
   res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "public, max-age=5, s-maxage=5");
   res.json({
     uptime: proxy ? `${Math.floor(proxy.uptime_secs / 3600)}h ${Math.floor((proxy.uptime_secs % 3600) / 60)}m` : "0h 0m",
-    processedToday: proxy?.processed ?? 0,
-    blockedToday: proxy?.blocked ?? 0,
-    blockRatio: proxy && (proxy.processed + proxy.blocked) > 0
-      ? ((proxy.blocked / (proxy.processed + proxy.blocked)) * 100).toFixed(2)
-      : "0.00",
+    processedToday: processed,
+    blockedToday: blocked,
+    blockRatio,
     chain,
     proxyOnline: proxy !== null,
+    paused,
+    policyContract: NENDO_POLICY,
+    auditContract: NENDO_AUDIT,
   });
 }

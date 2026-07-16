@@ -1,5 +1,15 @@
 import { TxFeedItem } from '../hooks/useApi'
 
+function fmtTime(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  if (diff < 60000) return 'Just now';
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
+  return d.toLocaleDateString();
+}
+
 export function TransactionFeed({ transactions, total }: { transactions: TxFeedItem[]; total: number }) {
   return (
     <div className="glass" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -9,7 +19,7 @@ export function TransactionFeed({ transactions, total }: { transactions: TxFeedI
             Transaction feed
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--ink3)', marginTop: 1 }}>
-            Proxy decisions streamed from local audit service
+            On-chain NendoAudit events from Avalanche Fuji
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.7rem', color: 'var(--ink3)' }}>
@@ -48,7 +58,7 @@ export function TransactionFeed({ transactions, total }: { transactions: TxFeedI
             {transactions.map((tx, i) => (
               <tr key={i}>
                 <td style={{ padding: 12, borderBottom: i < transactions.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--ink)' }}>
-                  {tx.time}
+                  {fmtTime(tx.time)}
                 </td>
                 <td style={{ padding: 12, borderBottom: i < transactions.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--ink)' }}>
                   {tx.agent}

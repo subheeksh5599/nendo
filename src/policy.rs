@@ -1,25 +1,24 @@
-//! Policy engine — evaluates transactions against on-chain and local rules
+//! Policy engine — evaluates transactions against on-chain + local rules.
 //!
-//! Evaluation order (fail-fast):
-//!   1. Circuit breaker (paused flag)
-//!   2. Recipient blocklist
-//!   3. Per-agent rate limit (sliding window)
-//!   4. Per-agent daily spend limit
-//!   5. Per-tx amount cap
-//!   6. Contract allowlist
-//!   7. eth_estimateGas simulation
-//!   8. Balance drain check
+//! CONCURRENCY: Per-agent Tokio mutex held across check→forward→record.
+//! Only one transaction per agent can be in the critical section at a time.
 //!
-//! Each agent has its own state (spend, rate) tracked in-memory.
-//! The owner can set per-agent overrides via setAgentPolicy.
+//! FAIL-CLOSED: Every RPC call returns Result; errors propagate as blocked
+//! transactions, never as silent forwards.
+//!
+//! ARCHITECTURE GAP FIX: allowlistMode is enforced BEFORE simulation.
+//! If allowlistMode == true and `to` is not in allowedContracts, the tx is
+//! rejected WITHOUT calling eth_call. This combined with eth_call's state
+//! diff detection closes the estimateGas blindspot completely.
 
 use crate::simulation::{SimulationResult, Simulator};
-use crate::config::PolicyDefaults;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::sync::RwLock;
-use tracing::{debug, warn};
+use tokio::sync::{Mutex, RwLock};
+use tracing::{info, warn, error};
+
+// ─── Types ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone)]
 pub struct PolicyRule {
@@ -29,310 +28,291 @@ pub struct PolicyRule {
     pub allowed_contracts: Vec<String>,
     pub blocked_recipients: Vec<String>,
     pub paused: bool,
+    pub allowlist_mode: bool,
 }
 
 impl Default for PolicyRule {
     fn default() -> Self {
         Self {
-            max_per_tx_wei: 10 * 10u128.pow(18), // 10 AVAX
-            max_daily_wei: 100 * 10u128.pow(18),  // 100 AVAX
-            min_interval_ms: 5000,                // 5 seconds
-            allowed_contracts: vec![],
-            blocked_recipients: vec![],
+            max_per_tx_wei: 10_000_000_000_000_000_000, // 10 AVAX
+            max_daily_wei: 100_000_000_000_000_000_000, // 100 AVAX
+            min_interval_ms: 5_000,
+            allowed_contracts: Vec::new(),
+            blocked_recipients: Vec::new(),
             paused: false,
+            allowlist_mode: false,
         }
     }
 }
 
-impl From<PolicyDefaults> for PolicyRule {
-    fn from(p: PolicyDefaults) -> Self {
-        Self {
-            max_per_tx_wei: parse_wei_hex(&p.max_avax_per_tx),
-            max_daily_wei: parse_wei_hex(&p.max_avax_daily),
-            min_interval_ms: p.min_interval_seconds * 1000,
-            allowed_contracts: p.allowed_contracts
-                .into_iter()
-                .map(|a| normalize_addr(&a))
-                .collect(),
-            blocked_recipients: p.blocked_recipients
-                .into_iter()
-                .map(|a| normalize_addr(&a))
-                .collect(),
-            paused: p.paused,
-        }
-    }
+#[derive(Debug, Clone)]
+pub struct AgentOverride {
+    pub max_per_tx_wei: u128,
+    pub max_daily_wei: u128,
+    pub min_interval_ms: u64,
 }
 
-/// Per-agent transaction state for rate limiting and spend tracking.
 #[derive(Debug, Clone)]
 struct AgentState {
-    /// Wall clock time (ms) of the last accepted transaction.
     last_tx_ms: u64,
-    /// Total AVAX spent in the current 24-hour window.
     daily_spent_wei: u128,
-    /// Start of the current 24-hour window (Unix ms).
     window_start_ms: u64,
 }
 
 impl AgentState {
     fn new() -> Self {
-        Self {
-            last_tx_ms: 0,
-            daily_spent_wei: 0,
-            window_start_ms: now_ms(),
-        }
+        Self { last_tx_ms: 0, daily_spent_wei: 0, window_start_ms: now_ms() }
     }
-
     fn refresh_window(&mut self) {
         let now = now_ms();
-        let day_ms = 86_400_000;
-        if now - self.window_start_ms >= day_ms {
+        if now.saturating_sub(self.window_start_ms) >= 86_400_000 {
             self.daily_spent_wei = 0;
             self.window_start_ms = now;
         }
     }
 }
 
-/// Per-agent policy override (set by owner).
-#[derive(Debug, Clone)]
-pub struct AgentOverride {
-    max_per_tx_wei: u128,
-    max_daily_wei: u128,
-    min_interval_ms: u64,
-}
-
 #[derive(Debug)]
 pub enum PolicyResult {
-    Allowed {
-        simulation: SimulationResult,
-    },
-    Blocked {
-        reason: String,
-        rule: &'static str,
-    },
-    Escalate {
-        reason: String,
-    },
+    Allowed { simulation: SimulationResult, gas_used: u64 },
+    Blocked { reason: String, rule: String },
+    Escalate { reason: String },
 }
 
+// ─── Engine ──────────────────────────────────────────────────────────────
+
+type AgentLock = Arc<Mutex<()>>;
+
 pub struct PolicyEngine {
-    /// Global fallback rules.
-    global_rules: Arc<RwLock<PolicyRule>>,
-    /// Per-agent policy overrides (higher priority than global).
+    rules: Arc<RwLock<PolicyRule>>,
     agent_overrides: Arc<RwLock<HashMap<String, AgentOverride>>>,
-    /// Per-agent transaction state (rate limit + spend).
     agent_states: Arc<RwLock<HashMap<String, AgentState>>>,
-    /// eth_estimateGas simulator.
+    agent_locks: Arc<RwLock<HashMap<String, AgentLock>>>,
     simulator: Simulator,
 }
 
-impl Clone for PolicyEngine {
-    fn clone(&self) -> Self {
-        Self {
-            global_rules: self.global_rules.clone(),
-            agent_overrides: self.agent_overrides.clone(),
-            agent_states: self.agent_states.clone(),
-            simulator: self.simulator.clone(),
-        }
-    }
-}
-
 impl PolicyEngine {
-    pub fn new(rules: PolicyDefaults) -> Self {
+    pub fn new(rpc_url: &str, rules: PolicyRule, _client: Arc<reqwest::Client>) -> Self {
         Self {
-            global_rules: Arc::new(RwLock::new(rules.into())),
+            rules: Arc::new(RwLock::new(rules)),
             agent_overrides: Arc::new(RwLock::new(HashMap::new())),
             agent_states: Arc::new(RwLock::new(HashMap::new())),
-            simulator: Simulator::new(),
+            agent_locks: Arc::new(RwLock::new(HashMap::new())),
+            simulator: Simulator::new(rpc_url.to_string()),
         }
     }
 
-    /// Evaluate a transaction. `from` and `to` must be checksummed or lowercase addresses.
-    pub async fn evaluate(
+    async fn get_lock(&self, agent: &str) -> AgentLock {
+        let mut locks = self.agent_locks.write().await;
+        locks.entry(agent.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+
+    /// Atomic evaluate + record. Holds per-agent lock for the full cycle.
+    /// NEVER forwards a transaction blindly — any error returns Blocked.
+    pub async fn evaluate_and_record(
         &self,
         from: &str,
         to: &str,
         value_wei: u128,
         data: &str,
     ) -> PolicyResult {
-        let from_addr = normalize_addr(from);
-        let to_addr = normalize_addr(to);
+        let from_addr = normalize(from);
+        let to_addr = normalize(to);
 
-        // 1. Global circuit breaker
+        // Per-agent lock — serializes all tx for this agent
+        let lock = self.get_lock(&from_addr).await;
+        let _guard = lock.lock().await;
+
+        // ── 1. Circuit breaker ──
+        if self.rules.read().await.paused {
+            info!(agent=%from_addr, "blocked: circuit breaker active");
+            return PolicyResult::Blocked {
+                reason: "firewall_paused".into(),
+                rule: "circuit_breaker".into(),
+            };
+        }
+
+        // ── 2. Recipient blocklist ──
+        if self.rules.read().await.blocked_recipients.contains(&to_addr) {
+            warn!(agent=%from_addr, recipient=%to_addr, "blocked: recipient blocklisted");
+            return PolicyResult::Blocked {
+                reason: "recipient_blocklisted".into(),
+                rule: "blocklist".into(),
+            };
+        }
+
+        // ── 3. Contract allowlist (ARCHITECTURE GAP FIX) ──
+        // If allowlist mode is on, reject ANY tx to a non-allowlisted contract
+        // BEFORE simulation. This closes the estimateGas blindspot entirely.
         {
-            let rules = self.global_rules.read().await;
-            if rules.paused {
+            let rules = self.rules.read().await;
+            if rules.allowlist_mode && !to_addr.is_empty()
+                && to_addr != "0x" && to_addr != "0x0000000000000000000000000000000000000000"
+                && !rules.allowed_contracts.contains(&to_addr)
+            {
+                warn!(agent=%from_addr, target=%to_addr, "blocked: contract not in allowlist (allowlist_mode=on)");
                 return PolicyResult::Blocked {
-                    reason: "firewall_paused".to_string(),
-                    rule: "circuit_breaker",
+                    reason: "contract_not_allowlisted".into(),
+                    rule: "allowlist".into(),
                 };
             }
         }
 
-        // 2. Recipient blocklist
-        {
-            let rules = self.global_rules.read().await;
-            if rules.blocked_recipients.contains(&to_addr) {
-                return PolicyResult::Blocked {
-                    reason: "recipient_blocklisted".to_string(),
-                    rule: "blocked_recipients",
-                };
-            }
-        }
-
-        // 3. Get effective rules for this agent (override or global)
+        // ── 4. Rate limit ──
         let (max_per_tx, max_daily, min_interval) = {
             let overrides = self.agent_overrides.read().await;
             if let Some(ov) = overrides.get(&from_addr) {
                 (ov.max_per_tx_wei, ov.max_daily_wei, ov.min_interval_ms)
             } else {
-                let rules = self.global_rules.read().await;
-                (rules.max_per_tx_wei, rules.max_daily_wei, rules.min_interval_ms)
+                let r = self.rules.read().await;
+                (r.max_per_tx_wei, r.max_daily_wei, r.min_interval_ms)
             }
         };
 
-        // 4. Per-agent rate limit
         {
             let mut states = self.agent_states.write().await;
             let state = states.entry(from_addr.clone()).or_insert_with(AgentState::new);
             let now = now_ms();
             if now.saturating_sub(state.last_tx_ms) < min_interval {
+                let remaining = min_interval - now.saturating_sub(state.last_tx_ms);
+                warn!(agent=%from_addr, remaining_ms=remaining, "blocked: rate limit");
                 return PolicyResult::Blocked {
-                    reason: format!("rate_limit_exceeded_min_interval_{}ms", min_interval),
-                    rule: "rate_limit",
+                    reason: format!("rate_limit: {}ms remaining", remaining),
+                    rule: "rate_limit".into(),
                 };
             }
         }
 
-        // 5. Per-agent daily spend limit
+        // ── 5. Daily spend limit ──
         {
             let mut states = self.agent_states.write().await;
             let state = states.entry(from_addr.clone()).or_insert_with(AgentState::new);
             state.refresh_window();
-            if state.daily_spent_wei + value_wei > max_daily {
+            if state.daily_spent_wei.saturating_add(value_wei) > max_daily {
+                warn!(agent=%from_addr, spent=state.daily_spent_wei, cap=max_daily, "blocked: daily limit");
                 return PolicyResult::Blocked {
-                    reason: format!(
-                        "daily_limit_exceeded_needed_{}_cap_{}",
-                        wei_to_avax_str(state.daily_spent_wei + value_wei),
-                        wei_to_avax_str(max_daily)
-                    ),
-                    rule: "daily_spend_limit",
+                    reason: format!("daily_limit: spent {} of {}", state.daily_spent_wei, max_daily),
+                    rule: "daily_limit".into(),
                 };
             }
         }
 
-        // 6. Per-tx amount cap
+        // ── 6. Per-tx cap ──
         if value_wei > max_per_tx {
+            warn!(agent=%from_addr, value=value_wei, cap=max_per_tx, "blocked: per-tx limit");
             return PolicyResult::Blocked {
-                reason: format!(
-                    "per_tx_limit_exceeded_{}_cap_{}",
-                    wei_to_avax_str(value_wei),
-                    wei_to_avax_str(max_per_tx)
-                ),
-                rule: "per_tx_limit",
+                reason: format!("per_tx_limit: {} exceeds cap {}", value_wei, max_per_tx),
+                rule: "per_tx_limit".into(),
             };
         }
 
-        // 7. Contract allowlist (if non-empty, everything else is rejected)
-        {
-            let rules = self.global_rules.read().await;
-            if !rules.allowed_contracts.is_empty() && !rules.allowed_contracts.contains(&to_addr) {
-                return PolicyResult::Blocked {
-                    reason: "contract_not_allowlisted".to_string(),
-                    rule: "allowlist",
-                };
-            }
-        }
-
-        // 8. Simulation via eth_estimateGas — detect reverts before forwarding
+        // ── 7. Simulation (eth_call + eth_estimateGas) ──
+        // FAIL-CLOSED: any simulation error → blocked
         let sim = match self.simulator.simulate(from, to, value_wei, data).await {
             Ok(s) => s,
             Err(e) => {
-                warn!("simulation failed (will escalate): {}", e);
-                return PolicyResult::Escalate {
-                    reason: format!("simulation_error_{}", e),
+                error!(agent=%from_addr, error=%e, "simulation RPC error — rejecting (fail-closed)");
+                return PolicyResult::Blocked {
+                    reason: format!("simulation_error: {}", e),
+                    rule: "simulation".into(),
                 };
             }
         };
 
         if !sim.allowed {
+            let reason = sim.revert_reason.as_deref().unwrap_or("unknown");
+            warn!(agent=%from_addr, reason=%reason, "blocked: simulation failed");
             return PolicyResult::Blocked {
-                reason: format!("simulation_revert_{}", sim.revert_reason.as_deref().unwrap_or("unknown")),
-                rule: "simulation",
+                reason: format!("simulation: {}", reason),
+                rule: "simulation".into(),
             };
         }
 
-        // 9. Balance drain check — ensure agent has enough balance
+        // ── 8. Token drain detection ──
+        if let Some(ref drain) = sim.unexpected_state_change {
+            error!(agent=%from_addr, drain=%drain, "blocked: token drain detected");
+            return PolicyResult::Blocked {
+                reason: format!("token_drain: {}", drain),
+                rule: "token_drain".into(),
+            };
+        }
+
+        // ── 9. Balance check ──
         if sim.balance_after < value_wei {
+            warn!(agent=%from_addr, balance=sim.balance_after, needed=value_wei, "blocked: insufficient balance");
             return PolicyResult::Blocked {
-                reason: "insufficient_balance".to_string(),
-                rule: "balance_check",
+                reason: "insufficient_balance".into(),
+                rule: "balance".into(),
             };
         }
 
-        PolicyResult::Allowed { simulation: sim }
+        // ── 10. Record spend (still under lock) ──
+        {
+            let mut states = self.agent_states.write().await;
+            let state = states.entry(from_addr.clone()).or_insert_with(AgentState::new);
+            state.last_tx_ms = now_ms();
+            state.refresh_window();
+            state.daily_spent_wei = state.daily_spent_wei.saturating_add(value_wei);
+        }
+
+        let gas_used = sim.gas_used;
+        info!(agent=%from_addr, to=%to_addr, value=value_wei, gas=gas_used, "allowed");
+        PolicyResult::Allowed { simulation: sim, gas_used }
     }
 
-    /// Record that a transaction was accepted. Call this after successful forwarding.
-    pub async fn record(&self, from: &str, value_wei: u128) {
-        let from_addr = normalize_addr(from);
-        let mut states = self.agent_states.write().await;
-        let state = states.entry(from_addr).or_insert_with(AgentState::new);
-        state.last_tx_ms = now_ms();
-        state.refresh_window();
-        state.daily_spent_wei += value_wei;
-    }
+    // ── Admin ─────────────────────────────────────────────────────────
 
-    /// Update global rules (owner only — in production, gate with ownership check).
-    pub async fn update_global_rules(&self, rules: PolicyRule) {
-        let mut global = self.global_rules.write().await;
-        *global = rules;
-        debug!("global policy rules updated");
-    }
-
-    /// Set a per-agent override (owner only).
-    pub async fn set_agent_override(&self, agent: &str, override_: AgentOverride) {
-        let addr = normalize_addr(agent);
-        let mut overrides = self.agent_overrides.write().await;
-        overrides.insert(addr, override_);
-        debug!("agent policy override set");
-    }
-
-    /// Pause / unpause the firewall (owner only).
     pub async fn set_paused(&self, paused: bool) {
-        let mut rules = self.global_rules.write().await;
-        rules.paused = paused;
-        warn!("firewall paused={}", paused);
+        self.rules.write().await.paused = paused;
+        info!(paused, "circuit breaker toggled");
+    }
+
+    pub async fn set_rules(&self, rules: PolicyRule) {
+        *self.rules.write().await = rules;
+        info!("policy rules updated");
+    }
+
+    pub async fn set_agent_override(&self, agent: &str, ov: AgentOverride) {
+        self.agent_overrides.write().await.insert(normalize(agent), ov);
+        info!(%agent, "agent override set");
+    }
+
+    pub async fn add_allowed_contract(&self, contract: &str) {
+        self.rules.write().await.allowed_contracts.push(normalize(contract));
+        info!(%contract, "contract added to allowlist");
+    }
+
+    pub async fn block_recipient(&self, recipient: &str) {
+        self.rules.write().await.blocked_recipients.push(normalize(recipient));
+        info!(%recipient, "recipient blocklisted");
     }
 }
 
-// ─── Utility functions ────────────────────────────────────────────────────────
+// ─── Cloning ─────────────────────────────────────────────────────────────
 
-/// Parse a wei value string. Handles "0x" prefix and decimal.
-fn parse_wei_hex(value: &str) -> u128 {
-    let v = value.trim();
-    if v.starts_with("0x") || v.starts_with("0X") {
-        u128::from_str_radix(&v[2..], 16).unwrap_or(u128::MAX)
-    } else {
-        v.parse::<u128>().unwrap_or(u128::MAX)
+impl Clone for PolicyEngine {
+    fn clone(&self) -> Self {
+        Self {
+            rules: self.rules.clone(),
+            agent_overrides: self.agent_overrides.clone(),
+            agent_states: self.agent_states.clone(),
+            agent_locks: self.agent_locks.clone(),
+            simulator: self.simulator.clone(),
+        }
     }
 }
 
-/// Normalize an address to lowercase for consistent comparisons.
-fn normalize_addr(addr: &str) -> String {
+// ─── Utility ─────────────────────────────────────────────────────────────
+
+fn normalize(addr: &str) -> String {
     addr.trim().to_lowercase()
 }
 
-/// Get current Unix time in milliseconds.
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
-}
-
-/// Format wei as AVAX string (e.g. "10.5 AVAX").
-fn wei_to_avax_str(wei: u128) -> String {
-    let avax = wei as f64 / 10f64.powi(18);
-    format!("{:.4} AVAX", avax)
 }

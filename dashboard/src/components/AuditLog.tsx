@@ -1,6 +1,6 @@
 import { AuditEntry } from '../hooks/useApi'
 
-export function AuditLog({ entries }: { entries: AuditEntry[] }) {
+export function AuditLog({ entries, total = 0 }: { entries: AuditEntry[]; total?: number }) {
   return (
     <div className="glass" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 4 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -68,9 +68,9 @@ export function AuditLog({ entries }: { entries: AuditEntry[] }) {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: '0.75rem', color: 'var(--ink3)' }}>
-        <span>Showing {entries.length} of 1,301 events</span>
-        <a href="#" style={{ color: 'var(--coral)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-          Open explorer
+        <span>Showing {entries.length} of {total || entries.length} events</span>
+        <a href="https://testnet.snowtrace.io/address/0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7" target="_blank" rel="noopener" style={{ color: 'var(--coral)', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
+          View on SnowTrace
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
             <polyline points="15 3 21 3 21 9" />
