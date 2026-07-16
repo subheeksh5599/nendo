@@ -9,7 +9,7 @@
 [![Fuji: NendoPolicy](https://img.shields.io/badge/📜_Fuji-NendoPolicy-14151a)](https://testnet.snowtrace.io/address/0xe3c5541F125a00C578FEA78ad0395473eC3D1386)
 [![Fuji: NendoAudit](https://img.shields.io/badge/📜_Fuji-NendoAudit-14151a)](https://testnet.snowtrace.io/address/0x932c1A3df8a93b46f72A9C862fC0F580650b8701)
 [![License: MIT](https://img.shields.io/badge/license-MIT-E84142.svg)](LICENSE)
-![Tests](https://img.shields.io/badge/tests-10%20passing-3fb950)
+![Tests](https://img.shields.io/badge/tests-42%20passing-3fb950)
 ![Stack](https://img.shields.io/badge/Rust%20·%20Solidity%20·%20React%2019%20·%20TypeScript-14151a)
 ![Avalanche](https://img.shields.io/badge/Avalanche-Fuji%20testnet-E84142)
 
