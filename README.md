@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/media/landing-hero.png" alt="Nendo — Agent RPC Firewall on Avalanche" width="100%" />
+<img src="docs/media/landing.png" alt="Nendo — Agent RPC Firewall on Avalanche" width="100%" />
 
 &nbsp;
 
@@ -110,7 +110,7 @@ Existing solutions are off-chain scripts. Change the config file, bypass the gua
 
 Five capabilities, all enforced by Solidity contracts on Avalanche C-Chain. The policy contract is live at [0x473a4B...](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308).
 
-<img src="docs/media/dashboard-hero.png" alt="Nendo Operations Dashboard — live transaction feed, KPI cards, decision breakdown, audit log" width="100%" />
+<img src="docs/media/landing-hero.png" alt="Nendo Operations Dashboard — live transaction feed, KPI cards, decision breakdown, audit log" width="100%" />
 
 ### 1 · RPC proxy firewall
 
