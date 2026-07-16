@@ -53,7 +53,7 @@ function InfoSection() {
             </h3>
             <p className="text-white/60 text-base mt-4">
               Every transaction is simulated against your policies using
-              eth_estimateGas before forwarding.
+              debug_traceCall + eth_call + eth_estimateGas before forwarding.
             </p>
           </div>
 

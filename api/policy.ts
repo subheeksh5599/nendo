@@ -1,7 +1,7 @@
 import { ethers } from "ethers";
 
 const FUJI_RPC = "https://api.avax-test.network/ext/bc/C/rpc";
-const NENDO_POLICY = "0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308";
+const NENDO_POLICY = "0xe3c5541F125a00C578FEA78ad0395473eC3D1386";
 
 const POLICY_ABI = [
   "function maxPerTx() view returns (uint256)",
@@ -41,7 +41,7 @@ export default async function handler(_req: any, res: any) {
       circuitBreaker: paused,
       allowlistMode,
       contract: NENDO_POLICY,
-      auditContract: "0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7",
+      auditContract: "0x932c1A3df8a93b46f72A9C862fC0F580650b8701",
       lastUpdated,
     });
   } catch (e: any) {

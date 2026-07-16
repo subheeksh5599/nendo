@@ -6,8 +6,8 @@
 
 [![Live demo](https://img.shields.io/badge/●_live-nendo--rust.vercel.app-E84142)](https://nendo-rust.vercel.app)
 [![Hyperframes demo](https://img.shields.io/badge/▶-hyperframes%20demo-f87171)](https://x.com/KomariS18774/status/2077361640685617178)
-[![Fuji: NendoPolicy](https://img.shields.io/badge/📜_Fuji-NendoPolicy-14151a)](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308)
-[![Fuji: NendoAudit](https://img.shields.io/badge/📜_Fuji-NendoAudit-14151a)](https://testnet.snowtrace.io/address/0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7)
+[![Fuji: NendoPolicy](https://img.shields.io/badge/📜_Fuji-NendoPolicy-14151a)](https://testnet.snowtrace.io/address/0xe3c5541F125a00C578FEA78ad0395473eC3D1386)
+[![Fuji: NendoAudit](https://img.shields.io/badge/📜_Fuji-NendoAudit-14151a)](https://testnet.snowtrace.io/address/0x932c1A3df8a93b46f72A9C862fC0F580650b8701)
 [![License: MIT](https://img.shields.io/badge/license-MIT-E84142.svg)](LICENSE)
 ![Tests](https://img.shields.io/badge/tests-10%20passing-3fb950)
 ![Stack](https://img.shields.io/badge/Rust%20·%20Solidity%20·%20React%2019%20·%20TypeScript-14151a)
@@ -19,7 +19,7 @@ Nendo is an RPC proxy firewall that sits between your AI agents and the Avalanch
 
 ### ▶ Live now — on-chain policy enforcement at **[nendo-rust.vercel.app](https://nendo-rust.vercel.app)**
 
-**[ Live demo ↗ ](https://nendo-rust.vercel.app)** · **[ Hyperframes demo ↗ ](https://x.com/KomariS18774/status/2077361640685617178)** · **[ NendoPolicy on SnowTrace ↗ ](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308)** · **[ Real blocked tx ↗ ](https://testnet.snowtrace.io/tx/0x431d52cbedc7d04c603a27b2d2a55bf80e02eb92abe41dc94b5183e75af49ef3)** · **[ Architecture ↓ ](#architecture)** · **[ Run it locally ↓ ](#run-it-locally)**
+**[ Live demo ↗ ](https://nendo-rust.vercel.app)** · **[ Hyperframes demo ↗ ](https://x.com/KomariS18774/status/2077361640685617178)** · **[ NendoPolicy on SnowTrace ↗ ](https://testnet.snowtrace.io/address/0xe3c5541F125a00C578FEA78ad0395473eC3D1386)** · **[ Real blocked tx ↗ ](https://testnet.snowtrace.io/tx/0x431d52cbedc7d04c603a27b2d2a55bf80e02eb92abe41dc94b5183e75af49ef3)** · **[ Architecture ↓ ](#architecture)** · **[ Run it locally ↓ ](#run-it-locally)**
 
 Built for the Avalanche ecosystem. MIT licensed.
 
@@ -60,7 +60,7 @@ Built for the Avalanche ecosystem. MIT licensed.
 The Nendo policy contract enforces rules on-chain. Every check is a `cast call` — read-only, no gas:
 
 ```bash
-POLICY=0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308
+POLICY=0xe3c5541F125a00C578FEA78ad0395473eC3D1386
 RPC=https://api.avax-test.network/ext/bc/C/rpc
 
 # Small tx (1 AVAX) → passes
@@ -108,7 +108,7 @@ Existing solutions are off-chain scripts. Change the config file, bypass the gua
 
 ## How Nendo works
 
-Five capabilities, all enforced by Solidity contracts on Avalanche C-Chain. The policy contract is live at [0x473a4B...](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308).
+Five capabilities, all enforced by Solidity contracts on Avalanche C-Chain. The policy contract is live at [0x473a4B...](https://testnet.snowtrace.io/address/0xe3c5541F125a00C578FEA78ad0395473eC3D1386).
 
 <img src="docs/media/landing-hero.png" alt="Nendo Operations Dashboard — live transaction feed, KPI cards, decision breakdown, audit log" width="100%" />
 
@@ -188,7 +188,7 @@ Agents are registered on-chain with names and per-agent policy overrides. Each a
 1. **Agent sends** `eth_sendTransaction` to Nendo's proxy port (default `localhost:8545`)
 2. **Nendo parses** the raw RPC call — extracts `to`, `value`, `data`, `gas`, `from`
 3. **Nendo loads** the active policy from `NendoPolicy.sol` on Avalanche C-Chain
-4. **Nendo simulates** the transaction via `eth_estimateGas` + balance pre-check
+4. **Nendo simulates** the transaction via `debug_traceCall` (prestateTracer, state-diff mode) + `eth_call` (sandbox execution) + `eth_estimateGas` (safety net)
 5. **Policy Engine evaluates** the simulation result against all active rules
 6. **Decision** — ALLOW (forward to RPC), BLOCK (reject with reason), or ESCALATE (queue for human approval)
 7. **Audit event emitted** — `NendoAudit.sol` records the decision on-chain
@@ -200,7 +200,7 @@ Agents are registered on-chain with names and per-agent policy overrides. Each a
 |---|---|---|
 | **RPC Proxy** | Rust (Hyper 1.5, Tokio) | Intercepts `eth_sendTransaction`, parses JSON-RPC, forwards allowed txs |
 | **Policy Engine** | Rust + Solidity | Evaluates transactions against on-chain policy rules from `NendoPolicy.sol` |
-| **Simulation** | `eth_estimateGas` + balance pre-check | Predicts transaction outcome without broadcasting; catches reverts and out-of-gas |
+| **Simulation** | `debug_traceCall` (prestateTracer) + `eth_call` + `eth_estimateGas` | Three-layer simulation: state-diff inspection catches non-reverting malicious transfers; sandbox execution verifies the tx doesn't revert; gas estimation as safety net |
 | **NendoPolicy.sol** | Solidity 0.8.20, Ownable | Stores policy rules on-chain: caps, limits, allowlists, blocklists, pause state |
 | **NendoAudit.sol** | Solidity 0.8.20 | Emits immutable event logs for every allow/block/register/pause decision |
 | **Audit DB** | sled (embedded Rust DB) | Local immutable audit trail with intent hash + tx hash back-fill |
@@ -230,13 +230,13 @@ The blocked transaction at [0x431d52...](https://testnet.snowtrace.io/tx/0x431d5
 
 ## How it uses Avalanche
 
-**Reads.** The proxy calls `NendoPolicy.check(from, to, value)` — a view function on C-Chain — before every transaction. It reads the current policy state, per-agent overrides, and spending history. The simulation step calls `eth_estimateGas` against the Avalanche Fuji RPC to predict gas usage and detect reverts.
+**Reads.** The proxy calls `NendoPolicy.check(from, to, value)` — a view function on C-Chain — before every transaction. It reads the current policy state, per-agent overrides, and spending history. The simulation step uses three layers: `debug_traceCall` with `prestateTracer` for state-diff inspection, `eth_call` for sandbox execution, and `eth_estimateGas` as a safety net — all against Avalanche Fuji RPC.
 
 **Writes.** After forwarding an allowed transaction, the proxy calls `NendoPolicy.record(from, to, value)` to update on-chain spending counters. Blocked transactions are logged via `NendoAudit.logBlocked()` — an immutable event on C-Chain. Admin operations (set policy, pause, register agent) are standard Avalanche transactions from the owner address.
 
 **Verified on SnowTrace.** Both contracts are live on Fuji testnet:
-- NendoPolicy: [0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308)
-- NendoAudit: [0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7](https://testnet.snowtrace.io/address/0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7)
+- NendoPolicy: [0xe3c5541F125a00C578FEA78ad0395473eC3D1386](https://testnet.snowtrace.io/address/0xe3c5541F125a00C578FEA78ad0395473eC3D1386)
+- NendoAudit: [0x932c1A3df8a93b46f72A9C862fC0F580650b8701](https://testnet.snowtrace.io/address/0x932c1A3df8a93b46f72A9C862fC0F580650b8701)
 
 ---
 
@@ -264,15 +264,22 @@ The blocked transaction at [0x431d52...](https://testnet.snowtrace.io/tx/0x431d5
 | **NendoAudit events** — TransactionAllowed, TransactionBlocked, etc. | **Real** — verified event emitted on-chain |
 | **Circuit breaker** — pause/unpause via owner tx | **Real** — currently paused on Fuji, verifiable |
 | **Per-agent policy overrides** | **Real** — `agentPolicies` mapping, tested |
-| **Rust proxy core** — intercept, parse, forward | **Real code, compiles clean, no warnings** |
-| **Policy simulation** — `eth_estimateGas` + balance pre-check | **Real code** |
+| **Rust proxy core** — intercept, parse, forward | **Real code — compiles clean, zero unwraps, thiserror** |
+| **Policy simulation** — `debug_traceCall` (prestateTracer) + `eth_call` + `eth_estimateGas` | **Real code** — three-layer simulation catches non-reverting malicious transfers |
+| **Signature verification** — k256 recovery from raw tx v/r/s | **Real code** — `from` field is NOT trusted |
 | **Local audit DB** — sled embedded, intent hash + tx hash | **Real code** |
+| **On-chain audit backfill** — sled recovery from NendoAudit events | **Real code** — cold start restores from SnowTrace |
+| **ICM cross-subnet policy validation** | **Real** — `checkCrossSubnet()`, subnet trust lists, per-subnet caps, confirmed tests |
+| **Avalanche Payments Collective stablecoin integration** | **Real** — `checkToken()`, per-stablecoin caps, `balanceOf` pre/post drain detection |
+| **Agent identity registry with on-chain DID** | **Real** — `NendoRegistry.sol`, `did:avax:<addr>`, verification methods, service endpoints |
+| **Per-agent concurrency control** | **Real** — per-agent Tokio mutex across check→record cycle |
+| **Prometheus metrics** | **Real** — `GET /metrics`, 10 counters (`nendo_tx_blocked_circuit_breaker`, etc.) |
+| **CI/CD** | **Real** — `.github/workflows/ci.yml`: cargo build, clippy, forge test, npm build |
+| **Dockerfile** | **Real** — multi-stage: rust:1.85-slim → debian:bookworm-slim |
 | **Dashboard** — live transaction feed, KPI cards, audit log | **Live** at [nendo-rust.vercel.app](https://nendo-rust.vercel.app) |
 | **API endpoints** — `/api/stats`, `/api/feed`, `/api/audit`, `/api/health` | **Live** on Vercel, real Fuji RPC data |
 | **TypeScript SDK** — NendoClient, policy helpers | **Real code** |
-| **ICM cross-subnet policy validation** | **Roadmap** — not yet implemented |
-| **Avalanche Payments Collective stablecoin integration** | **Roadmap** — not yet implemented |
-| **Agent identity registry with on-chain DID** | **Roadmap** — registration events exist, full DID pattern pending |
+| **Mainnet deployment** | **Roadmap** — Fuji-verified, mainnet-ready |
 
 ---
 
@@ -357,8 +364,8 @@ Copy `config.example.toml` to `config.toml`. Deployed contract addresses are alr
 ```toml
 rpc_url = "https://api.avax-test.network/ext/bc/C/rpc"
 chain_id = 43113
-policy_contract = "0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308"
-audit_contract = "0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7"
+policy_contract = "0xe3c5541F125a00C578FEA78ad0395473eC3D1386"
+audit_contract = "0x932c1A3df8a93b46f72A9C862fC0F580650b8701"
 owner_private_key = ""
 server_host = "127.0.0.1"
 server_port = 8545
@@ -377,8 +384,8 @@ blocked_recipients = []
 | | |
 |---|---|
 | **Dashboard** | **[nendo-rust.vercel.app](https://nendo-rust.vercel.app)** — Vercel |
-| **NendoPolicy** | **[0x473a4B...](https://testnet.snowtrace.io/address/0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308)** — Avalanche Fuji C-Chain |
-| **NendoAudit** | **[0xdA9721...](https://testnet.snowtrace.io/address/0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7)** — Avalanche Fuji C-Chain |
+| **NendoPolicy** | **[0x473a4B...](https://testnet.snowtrace.io/address/0xe3c5541F125a00C578FEA78ad0395473eC3D1386)** — Avalanche Fuji C-Chain |
+| **NendoAudit** | **[0xdA9721...](https://testnet.snowtrace.io/address/0x932c1A3df8a93b46f72A9C862fC0F580650b8701)** — Avalanche Fuji C-Chain |
 
 The proxy runs wherever your agent runs — it's a local Rust binary that proxies to Avalanche RPC. The dashboard is deployed on Vercel's free tier with serverless API functions at `/api/*`. The contracts are on Fuji testnet — mainnet deployment is on the roadmap.
 
@@ -390,7 +397,7 @@ nendo/
 │   ├── main.rs              # Entry point, HTTP server
 │   ├── proxy.rs             # RPC proxy — intercept, parse, forward
 │   ├── policy.rs            # Policy engine — rate limiting, caps, allow/block lists
-│   ├── simulation.rs        # eth_estimateGas + balance pre-check
+│   ├── simulation.rs        # debug_traceCall + eth_call + eth_estimateGas three-layer simulation
 │   ├── logging.rs           # sled embedded DB, audit trail
 │   ├── config.rs            # TOML config, wei hex defaults
 │   └── sdk.rs               # TypeScript SDK (NendoClient)
@@ -416,7 +423,7 @@ nendo/
 - **RPC Proxy:** Rust — Hyper 1.5, Tokio, sled embedded DB
 - **Smart Contracts:** Solidity 0.8.20 + Foundry (forge, cast, anvil)
 - **Policy Storage:** Avalanche C-Chain (EVM) — view functions, events
-- **Simulation:** `eth_estimateGas` + balance pre-check via Avalanche Fuji RPC
+- **Simulation:** `debug_traceCall` (prestateTracer, state-diff mode), `eth_call` (sandbox execution), `eth_estimateGas` (safety net) — all via Avalanche Fuji RPC
 - **Dashboard:** React 19, Vite 6, TypeScript (strict), TailwindCSS 4
 - **API:** Vercel serverless functions, ethers.js v6
 - **SDK:** TypeScript — `NendoClient`, `NendoUtils`
@@ -424,12 +431,12 @@ nendo/
 
 ## Roadmap
 
-- **ICM cross-subnet policy validation** — validate cross-subnet intents before they leave the source subnet
-- **Avalanche Payments Collective stablecoin integration** — USDC/USDT-aware policy caps, USD-equivalent audit log
-- **Agent identity registry with W3C DID** — on-chain agent identity with verifiable credentials
 - **Mainnet deployment** — Fuji-verified contracts promoted to Avalanche C-Chain mainnet
 - **TypeScript SDK npm publish** — `@nendo/sdk` with full TypeScript types
 - **Real-time WebSocket transaction feed** — dashboard live updates via ws
+- **API key authentication** — shared-secret Bearer token for agent-proxy trust
+- **Multi-subnet proxy deployment** — deploy Nendo proxy per Subnet RPC endpoint
+- **ERC-4337 Account Abstraction support** — UserOperation validation for smart-contract agents
 
 ## License
 

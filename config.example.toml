@@ -6,8 +6,8 @@ rpc_url = "https://api.avax-test.network/ext/bc/C/rpc"
 chain_id = 43113
 
 # On-chain contract addresses (fill after deployment)
-policy_contract = "0x473a4BefDb7da98d466D9D032e17aD2fa53Ce308"
-audit_contract = "0xdA9721d1D0706fa0F0A49a35Cbf45Bd95D60cEB7"
+policy_contract = "0xe3c5541F125a00C578FEA78ad0395473eC3D1386"
+audit_contract = "0x932c1A3df8a93b46f72A9C862fC0F580650b8701"
 
 # Deployer private key for on-chain governance (hex, 0x-prefixed)
 owner_private_key = ""
