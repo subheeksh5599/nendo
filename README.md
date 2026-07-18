@@ -438,6 +438,22 @@ nendo/
 - **Multi-subnet proxy deployment** — deploy Nendo proxy per Subnet RPC endpoint
 - **ERC-4337 Account Abstraction support** — UserOperation validation for smart-contract agents
 
+## long-term vision
+
+agents don't go away - they multiply + they hold more value + they get more autonomous + no human in the loop to say "wait don't send that"
+
+nendo isn't a firewall app - it's the missing protocol layer
+
+- every chain gets a policy contract - not just avalanche - any evm - any subnet - any l2 where agents deploy capital
+- policy becomes the default - like how tls became default for http - you don't run an agent without on-chain rules - it's weird if you don't
+- programmable policy primitives - not just caps + allowlists - conditional logic - multi-sig agent collectives - time-locked vaults - recovery paths - policy inheritance from parent agents
+- agent identity as first-class on-chain primitive - registered - auditable - rateable - an agent without identity is invisible - nendo gives it a face
+- the audit trail becomes the evidence layer - when something goes wrong (and it will) - you don't grep logs - you query the chain - immutable - public - cryptographically sound
+- zero-knowledge proofs for policy compliance - verify an agent followed the rules without revealing the rules or the tx - privacy for institutional agents
+- nendo doesn't charge per tx - nendo is infrastructure - like an rpc endpoint - you run it - you configure it - it protects you
+
+the bet: within 2 years running an ai agent without a policy layer feels like running a server without a firewall in 2003 - technically possible - nobody does it - and the ones who do are already drained
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
