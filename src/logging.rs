@@ -109,7 +109,7 @@ impl AuditLog {
             return Ok(0);
         }
 
-        if self.db.len() > 0 {
+        if !self.db.is_empty() {
             tracing::info!("sled DB has {} entries, skipping backfill", self.db.len());
             return Ok(0);
         }
@@ -171,16 +171,14 @@ impl AuditLog {
 
     pub fn set_tx_hash(&mut self, from: &str, tx_hash: &str) -> Result<()> {
         let from_lower = from.to_lowercase();
-        for item in self.db.iter().rev() {
-            if let Ok((_, v)) = item {
-                if let Ok(mut entry) = serde_json::from_slice::<AuditEntry>(&v) {
-                    if entry.entry_type == "allowed" && entry.from.to_lowercase() == from_lower && entry.tx_hash.is_none() {
-                        entry.tx_hash = Some(tx_hash.to_string());
-                        let key = self.make_key("allowed", entry.timestamp_ms);
-                        self.db.insert(key, serde_json::to_vec(&entry)?)?;
-                        self.db.flush()?;
-                        return Ok(());
-                    }
+        for (_, v) in self.db.iter().rev().flatten() {
+            if let Ok(mut entry) = serde_json::from_slice::<AuditEntry>(&v) {
+                if entry.entry_type == "allowed" && entry.from.to_lowercase() == from_lower && entry.tx_hash.is_none() {
+                    entry.tx_hash = Some(tx_hash.to_string());
+                    let key = self.make_key("allowed", entry.timestamp_ms);
+                    self.db.insert(key, serde_json::to_vec(&entry)?)?;
+                    self.db.flush()?;
+                    return Ok(());
                 }
             }
         }
@@ -189,10 +187,8 @@ impl AuditLog {
 
     pub fn get_recent(&self, limit: usize) -> Result<Vec<AuditEntry>> {
         let mut entries = Vec::with_capacity(limit);
-        for item in self.db.iter().rev().take(limit) {
-            if let Ok((_, v)) = item {
-                if let Ok(entry) = serde_json::from_slice(&v) { entries.push(entry); }
-            }
+        for (_, v) in self.db.iter().rev().take(limit).flatten() {
+            if let Ok(entry) = serde_json::from_slice(&v) { entries.push(entry); }
         }
         Ok(entries)
     }
@@ -254,8 +250,8 @@ impl AuditLog {
         let recipient = log.get("topics").and_then(|t| t.get(2))
             .and_then(|v| v.as_str()).unwrap_or("0x");
         let data = log.get("data").and_then(|d| d.as_str()).unwrap_or("");
-        let amount = u128::from_str_radix(&data[2..66].trim_start_matches('0'), 16).unwrap_or(0);
-        let ts = u64::from_str_radix(&data[130..194].trim_start_matches('0'), 16).unwrap_or(0);
+        let amount = u128::from_str_radix(data[2..66].trim_start_matches('0'), 16).unwrap_or(0);
+        let ts = u64::from_str_radix(data[130..194].trim_start_matches('0'), 16).unwrap_or(0);
 
         AuditEntry {
             entry_type: "allowed".into(),

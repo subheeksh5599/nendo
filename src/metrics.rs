@@ -22,6 +22,12 @@ pub struct Metrics {
     pub start_time: std::time::Instant,
 }
 
+impl Default for Metrics {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Metrics {
     pub fn new() -> Self {
         Self {
@@ -63,12 +69,12 @@ impl Metrics {
         let uptime = self.start_time.elapsed().as_secs();
         let mut out = String::new();
 
-        out.push_str(&format!("# HELP nendo_tx_allowed_total Total allowed transactions\n"));
-        out.push_str(&format!("# TYPE nendo_tx_allowed_total counter\n"));
+        out.push_str("# HELP nendo_tx_allowed_total Total allowed transactions\n");
+        out.push_str("# TYPE nendo_tx_allowed_total counter\n");
         out.push_str(&format!("nendo_tx_allowed_total {}\n", self.tx_allowed.load(Ordering::Relaxed)));
 
-        out.push_str(&format!("# HELP nendo_tx_blocked_total Total blocked transactions\n"));
-        out.push_str(&format!("# TYPE nendo_tx_blocked_total counter\n"));
+        out.push_str("# HELP nendo_tx_blocked_total Total blocked transactions\n");
+        out.push_str("# TYPE nendo_tx_blocked_total counter\n");
         out.push_str(&format!("nendo_tx_blocked_total {}\n", self.tx_blocked.load(Ordering::Relaxed)));
 
         let mut emit = |name: &str, val: u64| {
@@ -85,12 +91,12 @@ impl Metrics {
         emit("tx_blocked_token_drain", self.tx_blocked_token_drain.load(Ordering::Relaxed));
         emit("tx_blocked_balance", self.tx_blocked_balance.load(Ordering::Relaxed));
 
-        out.push_str(&format!("# HELP nendo_uptime_seconds Proxy uptime in seconds\n"));
-        out.push_str(&format!("# TYPE nendo_uptime_seconds gauge\n"));
+        out.push_str("# HELP nendo_uptime_seconds Proxy uptime in seconds\n");
+        out.push_str("# TYPE nendo_uptime_seconds gauge\n");
         out.push_str(&format!("nendo_uptime_seconds {}\n", uptime));
 
-        out.push_str(&format!("# HELP nendo_audit_entries Audit log entry count\n"));
-        out.push_str(&format!("# TYPE nendo_audit_entries gauge\n"));
+        out.push_str("# HELP nendo_audit_entries Audit log entry count\n");
+        out.push_str("# TYPE nendo_audit_entries gauge\n");
         out.push_str(&format!("nendo_audit_entries {}\n", audit_entries));
 
         out

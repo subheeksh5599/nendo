@@ -34,6 +34,7 @@ pub struct RpcProxy {
     metrics: Metrics,
     processed: Arc<AtomicU64>,
     blocked: Arc<AtomicU64>,
+    #[allow(dead_code)]
     start_time: std::time::Instant,
 }
 
@@ -41,6 +42,7 @@ pub struct RpcProxy {
 
 #[derive(Debug, serde::Deserialize)]
 struct JsonRpcRequest {
+    #[allow(dead_code)]
     jsonrpc: String,
     method: String,
     #[serde(default)]

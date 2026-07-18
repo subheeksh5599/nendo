@@ -70,10 +70,8 @@ impl Config {
     pub fn load() -> Result<Self> {
         let path = if Path::new("config.toml").exists() {
             Some("config.toml".to_string())
-        } else if let Ok(p) = std::env::var("NENDO_CONFIG") {
-            Some(p)
         } else {
-            None
+            std::env::var("NENDO_CONFIG").ok()
         };
         match path {
             Some(p) => {
